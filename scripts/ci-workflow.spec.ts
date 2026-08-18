@@ -376,7 +376,7 @@ describe('Python release workflows', () => {
 })
 
 describe('Desktop release build workflow', () => {
-  it('is manual-only, authorizes the triggering administrator before checkout, and uploads an unsigned checkpoint', () => {
+  it('is manual-only, authorizes the triggering administrator before checkout, and uploads an unsigned NSIS installer', () => {
     const workflow = loadWorkflow('.github/workflows/desktop-release-build.yml')
     expect(workflow.on).toEqual({ workflow_dispatch: null })
     expect(workflow.permissions).toEqual({ contents: 'read' })
@@ -406,8 +406,12 @@ describe('Desktop release build workflow', () => {
     })
     const serializedSteps = JSON.stringify(build.steps)
     expect(serializedSteps).toContain('cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml')
-    expect(serializedSteps).toContain('tauri build --no-bundle')
-    expect(serializedSteps).toContain("kind = 'unsigned-checkout-checkpoint'")
+    expect(serializedSteps).toContain('tauri build --bundles nsis --ci --no-sign')
+    expect(serializedSteps).toContain("Filter '*-setup.exe'")
+    expect(serializedSteps).toContain("kind = 'unsigned-checkout-dependent-installer'")
+    expect(serializedSteps).toContain('installer = \'nsis\'')
+    expect(serializedSteps).toContain('bundledInstaller = $true')
+    expect(serializedSteps).toContain('checkoutDependent = $true')
     expect(serializedSteps).toContain('standaloneBackend = $false')
     expect(serializedSteps).toContain('signed = $false')
     expect(serializedSteps).toContain('actions/upload-artifact@v4')

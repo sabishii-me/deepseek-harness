@@ -1,7 +1,6 @@
-# Build the current Windows Tauri checkout checkpoint in Cargo's release profile.
-# This workflow intentionally does not publish, sign, or create an installer: the
-# desktop backend is not a standalone sidecar yet and tauri.conf.json keeps
-# bundle.active=false.
+# Build an installable Windows NSIS package for the current Tauri checkout
+# checkpoint. The installer is intentionally unsigned and checkout-dependent:
+# the desktop backend is not a standalone sidecar yet.
 name: Desktop release build
 
 on:
@@ -46,7 +45,7 @@ jobs:
           echo "triggering-actor=$TRIGGERING_ACTOR" >> "$GITHUB_OUTPUT"
 
   build-windows:
-    name: Windows x64 / unsigned release executable
+    name: Windows x64 / unsigned NSIS installer
     needs: authorize
     runs-on: windows-2025
     timeout-minutes: 60
@@ -77,30 +76,44 @@ jobs:
       - name: Test Rust desktop transport
         run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
 
-      - name: Build Tauri release executable
-        run: pnpm --filter @deepseek-ai/dsh-desktop exec tauri build --no-bundle
+      - name: Build Tauri NSIS installer
+        run: pnpm --filter @deepseek-ai/dsh-desktop exec tauri build --bundles nsis --ci --no-sign
 
-      - name: Stage unsigned checkpoint artifact
+      - name: Stage unsigned checkpoint installer
         id: artifact
         env:
           TRIGGERING_ACTOR: ${{ needs.authorize.outputs.triggering-actor }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $source = 'apps/desktop/src-tauri/target/release/dsh-desktop.exe'
-          if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
-            throw "Tauri release executable was not produced at $source"
+          $executable = 'apps/desktop/src-tauri/target/release/dsh-desktop.exe'
+          if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+            throw "Tauri release executable was not produced at $executable"
+          }
+
+          $installers = @(Get-ChildItem -Path 'apps/desktop/src-tauri/target/release/bundle/nsis' -Filter '*-setup.exe' -File)
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one NSIS installer, found $($installers.Count)"
           }
 
           $version = (Get-Content -Raw apps/desktop/src-tauri/tauri.conf.json | ConvertFrom-Json).version
           $directory = 'dist/desktop/windows-x64'
           New-Item -ItemType Directory -Force -Path $directory | Out-Null
-          Copy-Item -LiteralPath $source -Destination "$directory/deepseek-harness.exe"
-          $hash = (Get-FileHash -Algorithm SHA256 "$directory/deepseek-harness.exe").Hash.ToLowerInvariant()
-          "$hash  deepseek-harness.exe" | Set-Content -NoNewline -Encoding ascii "$directory/SHA256SUMS"
+          Copy-Item -LiteralPath $installers[0].FullName -Destination "$directory/deepseek-harness-$version-windows-x64-setup.exe"
+          Copy-Item -LiteralPath $executable -Destination "$directory/deepseek-harness.exe"
+
+          Push-Location $directory
+          try {
+            Get-ChildItem -Filter '*.exe' -File | Sort-Object Name | ForEach-Object {
+              $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
+              "$hash  $($_.Name)"
+            } | Set-Content -Encoding ascii 'SHA256SUMS'
+          } finally {
+            Pop-Location
+          }
 
           $metadata = [ordered]@{
             schemaVersion = 1
-            kind = 'unsigned-checkout-checkpoint'
+            kind = 'unsigned-checkout-dependent-installer'
             version = $version
             repository = '${{ github.repository }}'
             commit = '${{ github.sha }}'
@@ -109,7 +122,9 @@ jobs:
             runAttempt = '${{ github.run_attempt }}'
             triggeringActor = $env:TRIGGERING_ACTOR
             target = 'windows-x64'
-            bundledInstaller = $false
+            installer = 'nsis'
+            bundledInstaller = $true
+            checkoutDependent = $true
             standaloneBackend = $false
             signed = $false
           }
@@ -118,10 +133,10 @@ jobs:
           Get-Content "$directory/build-metadata.json"
           "version=$version" >> $env:GITHUB_OUTPUT
 
-      - name: Upload unsigned release executable
+      - name: Upload unsigned NSIS installer
         uses: actions/upload-artifact@v4
         with:
-          name: deepseek-harness-desktop-${{ steps.artifact.outputs.version }}-windows-x64-unsigned
+          name: deepseek-harness-desktop-${{ steps.artifact.outputs.version }}-windows-x64-nsis-unsigned
           path: dist/desktop/windows-x64/*
           if-no-files-found: error
           retention-days: 14
