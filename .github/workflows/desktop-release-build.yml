@@ -1,0 +1,142 @@
+# Build an installable Windows NSIS package for the current Tauri checkout
+# checkpoint. The installer is intentionally unsigned and checkout-dependent:
+# the desktop backend is not a standalone sidecar yet.
+name: Desktop release build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: Authorize administrator dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      triggering-actor: ${{ steps.authorize.outputs.triggering-actor }}
+    steps:
+      # Use triggering_actor rather than actor so a re-run is authorized against
+      # the person who requested that re-run, not only the original dispatcher.
+      # This must remain before every checkout or execution of repository code.
+      - name: Require repository administrator
+        id: authorize
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+        run: |
+          set -euo pipefail
+          permission="$(gh api \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "repos/$REPOSITORY/collaborators/$TRIGGERING_ACTOR/permission" \
+            --jq '.permission')"
+          if [[ "$permission" != admin ]]; then
+            echo "::error::Desktop release builds may only be triggered or re-run by a repository administrator; $TRIGGERING_ACTOR has '$permission' permission."
+            exit 1
+          fi
+          echo "Authorized repository administrator: $TRIGGERING_ACTOR"
+          echo "triggering-actor=$TRIGGERING_ACTOR" >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    name: Windows x64 / unsigned NSIS installer
+    needs: authorize
+    runs-on: windows-2025
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      CARGO_TERM_COLOR: always
+      DSH_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Test Rust desktop transport
+        run: cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml
+
+      - name: Build Tauri NSIS installer
+        run: pnpm --filter @deepseek-ai/dsh-desktop exec tauri build --bundles nsis --ci --no-sign
+
+      - name: Stage unsigned checkpoint installer
+        id: artifact
+        env:
+          TRIGGERING_ACTOR: ${{ needs.authorize.outputs.triggering-actor }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $executable = 'apps/desktop/src-tauri/target/release/dsh-desktop.exe'
+          if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+            throw "Tauri release executable was not produced at $executable"
+          }
+
+          $installers = @(Get-ChildItem -Path 'apps/desktop/src-tauri/target/release/bundle/nsis' -Filter '*-setup.exe' -File)
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one NSIS installer, found $($installers.Count)"
+          }
+
+          $version = (Get-Content -Raw apps/desktop/src-tauri/tauri.conf.json | ConvertFrom-Json).version
+          $directory = 'dist/desktop/windows-x64'
+          New-Item -ItemType Directory -Force -Path $directory | Out-Null
+          Copy-Item -LiteralPath $installers[0].FullName -Destination "$directory/deepseek-harness-$version-windows-x64-setup.exe"
+          Copy-Item -LiteralPath $executable -Destination "$directory/deepseek-harness.exe"
+
+          Push-Location $directory
+          try {
+            Get-ChildItem -Filter '*.exe' -File | Sort-Object Name | ForEach-Object {
+              $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
+              "$hash  $($_.Name)"
+            } | Set-Content -Encoding ascii 'SHA256SUMS'
+          } finally {
+            Pop-Location
+          }
+
+          $metadata = [ordered]@{
+            schemaVersion = 1
+            kind = 'unsigned-checkout-dependent-installer'
+            version = $version
+            repository = '${{ github.repository }}'
+            commit = '${{ github.sha }}'
+            ref = '${{ github.ref }}'
+            runId = '${{ github.run_id }}'
+            runAttempt = '${{ github.run_attempt }}'
+            triggeringActor = $env:TRIGGERING_ACTOR
+            target = 'windows-x64'
+            installer = 'nsis'
+            bundledInstaller = $true
+            checkoutDependent = $true
+            standaloneBackend = $false
+            signed = $false
+          }
+          $metadata | ConvertTo-Json | Set-Content -Encoding utf8 "$directory/build-metadata.json"
+          Get-Content "$directory/SHA256SUMS"
+          Get-Content "$directory/build-metadata.json"
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Upload unsigned NSIS installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepseek-harness-desktop-${{ steps.artifact.outputs.version }}-windows-x64-nsis-unsigned
+          path: dist/desktop/windows-x64/*
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,29 @@
+{
+  "name": "@deepseek-ai/dsh-desktop",
+  "description": "Tauri 2 desktop supervisor for the Bun-hosted DeepSeek Harness Web profile",
+  "version": "0.1.0-rc.7",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "apps/desktop"
+  },
+  "type": "module",
+  "files": [
+    "backend",
+    "bootstrap",
+    "src-tauri",
+    "desktop-dev.patch.yml"
+  ],
+  "scripts": {
+    "prepare:dev": "corepack pnpm -C ../.. run build",
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4"
+  }
+}

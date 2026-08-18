@@ -92,7 +92,7 @@ export class SandboxBashExecutor extends LocalBashExecutor {
       const result = await super.run(spec)
       return { ...result, sandbox: { mode, denied: false } }
     }
-    const confined = this.confine(spec.command, { ...policy, mode })
+    const confined = this.confine(spec, { ...policy, mode })
     let result: ShellRunResult
     try {
       result = await this.runArgv(spec, confined.argv)
@@ -119,7 +119,7 @@ export class SandboxBashExecutor extends LocalBashExecutor {
     if (mode === 'danger-full-access') return super.start(spec)
     // Once startArgv returns, install facts synchronously; promise settlement
     // cannot run before start() returns.
-    const confined = this.confine(spec.command, { ...policy, mode })
+    const confined = this.confine(spec, { ...policy, mode })
     let proc: ShellProcess
     try {
       proc = this.startArgv(spec, confined.argv)
@@ -170,12 +170,12 @@ export class SandboxBashExecutor extends LocalBashExecutor {
    * Wrap one shell command via the `ctx.sandbox` provider. Provider errors
    * propagate unchanged; the returned argv is handed directly to the local
    * executor's subprocess path.
-   * @param command - shell source for the confined inner `bash -c`.
+   * @param spec - resolved execution spec whose Bash argv is confined.
    * @param policy - resolved confined execution policy.
    * @returns the provider's exact argv and settlement-classification facts.
    */
-  private confine(command: string, policy: SandboxPolicy): ConfinedArgv {
-    return this.ctx.sandbox.confine(['bash', '-c', command], policy)
+  private confine(spec: ShellExecSpec, policy: SandboxPolicy): ConfinedArgv {
+    return this.ctx.sandbox.confine(this.argv(spec), policy)
   }
 }
 

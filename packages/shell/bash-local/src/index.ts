@@ -1,9 +1,9 @@
 /**
  * Local Service Provider for the bash capability seam over the subprocess
- * capability seam. Public commands run as `bash -c` in a managed process group spawned
- * through `ctx.subprocess`; subclasses may reuse the same mechanics with an
- * explicit argv. This executor owns command defaulting, deadlines and cause
- * classification, the model-friendly terminal environment, and the model-facing
+ * capability seam. Public commands run through a resolved `<bash> -c` argv in
+ * a managed process spawned through `ctx.subprocess`; subclasses may reuse the
+ * same mechanics with an explicit argv. This executor owns command defaulting,
+ * deadlines and cause classification, the model-friendly terminal environment, and the model-facing
  * stdout/stderr merge for background reads. Execution policy belongs in
  * `tools/pre-execute` or a sandboxing executor.
  * @module @deepseek-ai/dsh-bash-local
@@ -16,6 +16,7 @@ import type { ShellExecRequest, ShellExecSpec, ShellProcess, ShellProcessRead, S
 import type { SubprocessCollect, SubprocessHandle, SubprocessOutputReader, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { installSettingsSection } from '@deepseek-ai/dsh-settings'
 import { clampTimeout, deadline, MAX_TIMER_DELAY_MS, timeoutOf } from '@deepseek-ai/dsh-timeout'
+import { resolveBashPath } from './resolve.ts'
 
 /**
  * Model-friendly environment overrides: disable colors, pagers, and
@@ -51,10 +52,14 @@ export interface Config {
   maxSpillBytes?: number
   /** Grace period for kill escalation and inherited pipes; at most `MAX_TIMER_DELAY_MS`. */
   graceMs?: number
+  /** Explicit Bash executable; Windows otherwise resolves Git Bash or a PATH candidate. */
+  bashPath?: string
 }
 
-/** The shape after schemastery applied the defaults (cwd has none). */
-type ResolvedConfig = Required<Omit<Config, 'cwd'>> & Pick<Config, 'cwd'>
+/** The shape after schemastery applied the defaults (cwd/bashPath have none). */
+type ResolvedConfig = Required<Omit<Config, 'cwd' | 'bashPath'>> & Pick<Config, 'cwd' | 'bashPath'>
+
+export { candidateBashPaths, resolveBashPath } from './resolve.ts'
 
 /** Project a settled collect-mode reader into the final CollectedOutput shape. */
 function finalOutput(reader: SubprocessOutputReader): CollectedOutput {
@@ -94,7 +99,7 @@ export function assertServiceableBashConfig(config: Config): void {
 
 /**
  * Local bash executor over `ctx.subprocess`. Bounded output, spill files, and
- * process-group SIGTERM→SIGKILL escalation are the subprocess service's
+ * process-tree SIGTERM→SIGKILL escalation is the subprocess service's
  * mechanics; this executor supplies their configured budgets per spawn, so a
  * still-running background process stays managed (killed and joined at
  * composition teardown) even across an executor reload.
@@ -109,10 +114,17 @@ export class LocalBashExecutor extends ShellExecutor {
     maxOutputBytes: z.number().default(64_000),
     maxSpillBytes: z.number().default(DEFAULT_MAX_SPILL_BYTES),
     graceMs: z.number().default(DEFAULT_GRACE_MS),
+    bashPath: z.string(),
   })
 
   /** The currently authoritative config: the settings section, or the composition entry. */
   private source: () => ResolvedConfig
+
+  /** Config value from which the current executable was resolved. */
+  private declaredBashPath: string | undefined
+
+  /** The Bash executable every command runs through. */
+  private resolvedBashPath: string
 
   /** Validated config (schemastery applied the defaults before construction). */
   get config(): ResolvedConfig {
@@ -124,15 +136,22 @@ export class LocalBashExecutor extends ShellExecutor {
     // Schemastery fills these fields before construction; the type does not encode that step.
     const entry = config as ResolvedConfig
     assertServiceableBashConfig(entry)
+    this.declaredBashPath = entry.bashPath
+    this.resolvedBashPath = resolveBashPath(entry.bashPath)
     this.source = () => entry
     installSettingsSection(ctx, SHELL_SETTINGS_NAMESPACE, LocalBashExecutor.Config, entry, {
       validate: assertServiceableBashConfig,
       setSource: (current) => {
         this.source = current as () => ResolvedConfig
       },
-      // Every field is read through the getter at each command, so nothing
-      // derived from the source needs rebuilding when the document changes.
-      onChange: () => {},
+      // Executable probing is the only derived configuration fact.
+      onChange: () => {
+        const declared = this.source().bashPath
+        if (declared === this.declaredBashPath) return
+        const resolved = resolveBashPath(declared)
+        this.declaredBashPath = declared
+        this.resolvedBashPath = resolved
+      },
     })
   }
 
@@ -208,8 +227,13 @@ export class LocalBashExecutor extends ShellExecutor {
     return { stdout, stderr }
   }
 
+  /** Exact Bash invocation used by local and sandboxing executors. */
+  protected argv(spec: ShellExecSpec): string[] {
+    return [this.resolvedBashPath, '-c', spec.command]
+  }
+
   async run(spec: ShellExecSpec): Promise<ShellRunResult> {
-    return this.runArgv(spec, ['bash', '-c', spec.command])
+    return this.runArgv(spec, this.argv(spec))
   }
 
   /**
@@ -240,7 +264,7 @@ export class LocalBashExecutor extends ShellExecutor {
   }
 
   start(spec: ShellExecSpec): ShellProcess {
-    return this.startArgv(spec, ['bash', '-c', spec.command])
+    return this.startArgv(spec, this.argv(spec))
   }
 
   /**

@@ -375,6 +375,50 @@ describe('Python release workflows', () => {
   })
 })
 
+describe('Desktop release build workflow', () => {
+  it('is manual-only, authorizes the triggering administrator before checkout, and uploads an unsigned NSIS installer', () => {
+    const workflow = loadWorkflow('.github/workflows/desktop-release-build.yml')
+    expect(workflow.on).toEqual({ workflow_dispatch: null })
+    expect(workflow.permissions).toEqual({ contents: 'read' })
+
+    const authorize = workflowJob(workflow, 'authorize')
+    const build = workflowJob(workflow, 'build-windows')
+    if (!Array.isArray(authorize.steps) || !Array.isArray(build.steps)) {
+      throw new TypeError('Desktop release workflow must define authorization and build steps')
+    }
+
+    const authorizeSteps = authorize.steps.filter(isRecord)
+    const authorization = authorizeSteps.find(step => step.name === 'Require repository administrator')
+    expect(authorizeSteps.some(step => typeof step.uses === 'string' && step.uses.startsWith('actions/checkout@'))).toBe(false)
+    expect(authorization).toMatchObject({
+      env: {
+        GH_TOKEN: '${{ github.token }}',
+        REPOSITORY: '${{ github.repository }}',
+        TRIGGERING_ACTOR: '${{ github.triggering_actor }}',
+      },
+    })
+    expect(authorization?.run).toContain('collaborators/$TRIGGERING_ACTOR/permission')
+    expect(authorization?.run).toContain('[[ "$permission" != admin ]]')
+
+    expect(build).toMatchObject({
+      needs: 'authorize',
+      'runs-on': 'windows-2025',
+    })
+    const serializedSteps = JSON.stringify(build.steps)
+    expect(serializedSteps).toContain('cargo test --locked --manifest-path apps/desktop/src-tauri/Cargo.toml')
+    expect(serializedSteps).toContain('tauri build --bundles nsis --ci --no-sign')
+    expect(serializedSteps).toContain("Filter '*-setup.exe'")
+    expect(serializedSteps).toContain("kind = 'unsigned-checkout-dependent-installer'")
+    expect(serializedSteps).toContain('installer = \'nsis\'')
+    expect(serializedSteps).toContain('bundledInstaller = $true')
+    expect(serializedSteps).toContain('checkoutDependent = $true')
+    expect(serializedSteps).toContain('standaloneBackend = $false')
+    expect(serializedSteps).toContain('signed = $false')
+    expect(serializedSteps).toContain('actions/upload-artifact@v4')
+    expect(serializedSteps).not.toContain('release-action')
+  })
+})
+
 describe('Issue lifecycle workflow', () => {
   it('uses explicit review handoff events without rerunning when a draft becomes ready', () => {
     const lifecycle = loadWorkflow('.github/workflows/issue-lifecycle.yml')

@@ -548,6 +548,7 @@ export async function writeFileAtomic(
   const tempName = internals.tempName?.(absolutePath) ?? `${basename(absolutePath)}.tmp`
   const tempPath = join(stagingDir, tempName)
   const platform = internals.platform ?? process.platform
+  const desktopBunCompat = platform === 'win32' && process.env.DSH_DESKTOP_BUN_COMPAT === '1'
   const copyFileDacl = internals.copyFileDacl ?? copyFileDaclWin32
   const replaceFile = internals.replaceFile ?? replaceFileWin32
   const linkFile = internals.linkFile ?? link
@@ -564,7 +565,7 @@ export async function writeFileAtomic(
 
     handle = await open(tempPath, 'wx', 0o600)
     await handle.chmod(0o600)
-    if (platform === 'win32' && mode !== undefined) {
+    if (platform === 'win32' && mode !== undefined && !desktopBunCompat) {
       await copyFileDacl(absolutePath, tempPath)
     }
     await handle.writeFile(content, { encoding: 'utf8', ...signal ? { signal } : {} })
@@ -581,7 +582,7 @@ export async function writeFileAtomic(
       } catch (error: unknown) {
         await throwGuardedCreateFailure(error, absolutePath, createIfAbsent.displayPath, inspectPublicationTarget)
       }
-    } else if (platform === 'win32' && mode !== undefined) {
+    } else if (platform === 'win32' && mode !== undefined && !desktopBunCompat) {
       try {
         await replaceFile(absolutePath, tempPath)
       } catch (error: unknown) {

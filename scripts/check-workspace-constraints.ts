@@ -53,6 +53,9 @@ const releaseMemberDirectory = /^(?:packages\/[^/]+\/[^/]+|apps\/[^/]+|vendor\/[
 const localArtifactDirs = new Set(['node_modules'])
 const appPackageFiles: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh': ['lib/*.js', 'config'],
+  // The desktop package currently publishes only its source checkpoint; target
+  // installers are produced by Tauri rather than packed as npm artifacts.
+  '@deepseek-ai/dsh-desktop': ['backend', 'bootstrap', 'src-tauri', 'desktop-dev.patch.yml'],
   // The Web build emits sourcemaps for browser debugging; publishing them is
   // what the payload policy forbids, so the bundle ships without them.
   '@deepseek-ai/dsh-web-frontend': ['dist', '!dist/**/*.map'],

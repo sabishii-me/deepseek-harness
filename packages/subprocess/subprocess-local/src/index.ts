@@ -12,7 +12,6 @@ import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
 import { delimiter, extname, isAbsolute, resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import * as nodePty from 'node-pty'
 import type { IPtyForkOptions } from 'node-pty'
 import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import type {
@@ -26,6 +25,7 @@ import type { LocalSubprocessHandle, SpawnInternals } from './spawn.ts'
 import { createProcessInspector } from './process-inspector.ts'
 import type { ProcessInspector } from './process-inspector.ts'
 import { LocalTerminalHandle } from './terminal.ts'
+import { RustTerminalClient } from './rust-terminal.ts'
 
 /**
  * Local subprocess service: detached process trees, Node-shaped stdio
@@ -39,6 +39,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
   private live = new Set<LocalSubprocessHandle>()
   /** Live terminals retained through normal quiescence or host-exit finalization. */
   private terminals = new Set<LocalTerminalHandle>()
+  private rustTerminals: RustTerminalClient | undefined
   /** Test hook: spill and platform knobs forwarded to spawnSubprocess. */
   internals: SpawnInternals = {}
   /** Test hook for platform process inspection; production resolves lazily on terminal spawn. */
@@ -156,14 +157,19 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
     return handle
   }
 
-  // Local PTY allocation is synchronous, but the provider contract permits remote asynchronous allocation.
-  // oxlint-disable-next-line typescript/require-await -- Preserve promise rejection semantics at the async provider contract.
+  // Local PTY allocation is synchronous in the legacy provider, while the desktop Rust provider allocates asynchronously.
   async spawnTerminal(spec: SubprocessTerminalSpawnSpec): Promise<SubprocessTerminalHandle> {
     const file = spec.argv[0]
     if (file === undefined || file.length === 0) {
       throw new Error('subprocess-local: terminal argv must contain a program')
     }
     spec.signal?.throwIfAborted()
+    const rustAddress = process.env.DSH_DESKTOP_TERMINAL_ADDRESS
+    const rustToken = process.env.DSH_DESKTOP_TERMINAL_TOKEN
+    if (rustAddress !== undefined && rustToken !== undefined) {
+      this.rustTerminals ??= new RustTerminalClient(rustAddress, rustToken)
+      return this.rustTerminals.spawn(spec)
+    }
     const options: IPtyForkOptions = {
       name: 'dumb',
       rows: spec.rows,
@@ -172,6 +178,7 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
       env: childEnv(spec.env),
     }
     const inspector = this.terminalInspector ?? createProcessInspector()
+    const nodePty = await import('node-pty')
     const terminal = nodePty.spawn(file, [...spec.argv.slice(1)], options)
     const handle = new LocalTerminalHandle(terminal, inspector, spec.graceMs)
     this.terminals.add(handle)

@@ -1,0 +1,14 @@
+# Bun 1.3.14 does not yet implement two APIs used by optional Web rows.
+# Mount the browse Host provider directly because Bun cannot resolve the
+# auto-picker's opaque runtime package specifiers through the source loader.
+- id: llm-pi-ai
+  disabled: true
+- id: code-runtime
+  disabled: true
+- id: directory-picker
+  disabled: true
+- insert:
+    - id: desktop-directory-picker-host
+      name: '@deepseek-ai/dsh-host-directory-picker-browse'
+      config:
+        maxEntries: 1000

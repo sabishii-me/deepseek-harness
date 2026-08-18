@@ -11,7 +11,7 @@
  * @module dsh-session-persistence-jsonl/win32
  */
 
-import { mkdtemp, rm, stat } from 'node:fs/promises'
+import { mkdir, mkdtemp, rename, rm, stat } from 'node:fs/promises'
 import { join, parse, resolve, toNamespacedPath } from 'node:path'
 
 type MoveFileExW = (existing: string, replacement: string, flags: number) => number
@@ -35,6 +35,15 @@ const ERROR_NOT_SAME_DEVICE = 17
 const ERROR_FILE_EXISTS = 80
 const ERROR_INVALID_NAME = 123
 const ERROR_ALREADY_EXISTS = 183
+
+/**
+ * Bun 1.3.14 crashes in Koffi's N-API finalizer on Windows. The desktop
+ * checkout checkpoint opts into Node filesystem fallbacks until these native
+ * namespace operations move behind the Rust platform service.
+ */
+function desktopBunCompat(): boolean {
+  return process.env.DSH_DESKTOP_BUN_COMPAT === '1'
+}
 
 let bindings: Win32Bindings | undefined
 
@@ -114,6 +123,10 @@ async function assertDirectory(path: string): Promise<boolean> {
  * @param replacement - the final path, which must not already exist.
  */
 export async function publishNewFileWin32(existing: string, replacement: string): Promise<void> {
+  if (desktopBunCompat()) {
+    await rename(existing, replacement)
+    return
+  }
   const api = await win32()
   const ok = api.moveFileExW(toNamespacedPath(existing), toNamespacedPath(replacement), MOVEFILE_WRITE_THROUGH)
   if (ok === 0) throw win32Error('MoveFileExW', api.getLastError(), existing, replacement)
@@ -128,6 +141,10 @@ export async function publishNewFileWin32(existing: string, replacement: string)
  * @param target - the absolute directory path to create durably when absent.
  */
 export async function ensureDurableDirectoryWin32(target: string): Promise<void> {
+  if (desktopBunCompat()) {
+    await mkdir(target, { recursive: true, mode: 0o700 })
+    return
+  }
   const absolute = resolve(target)
   const root = parse(absolute).root
   await assertDirectory(root)

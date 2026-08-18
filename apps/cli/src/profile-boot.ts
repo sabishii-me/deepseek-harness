@@ -178,6 +178,8 @@ export interface RunProfileOptions {
   profile: string
   /** `--patch` overlay paths, in argv order. */
   patchFiles: readonly string[]
+  /** Whether to mount the Node-internal config patch watcher after boot. */
+  configReload?: boolean
   /** The invocation's inner arguments, handed to the tree through `ctx.cmdlineArgs`. */
   args: readonly string[]
 }
@@ -265,7 +267,8 @@ export async function runProfile(options: RunProfileOptions): Promise<{ ctx: Con
   // landed mid-setup. Watching is unconditional: a one-shot surface exits
   // through its bounded shutdown, which disposes the watchers before the
   // loop drains.
-  if (!signalShutdown.signal.aborted
+  if (options.configReload !== false
+    && !signalShutdown.signal.aborted
     && ctx.fiber.state === FiberState.ACTIVE
     && ctx.get('loader') !== undefined) {
     try {
