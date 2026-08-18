@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The bootstrap window has no Tauri command privileges.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

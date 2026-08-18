@@ -1,9 +1,9 @@
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local'
+import { LocalBashExecutor, candidateBashPaths, resolveBashPath } from '@deepseek-ai/dsh-bash-local'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { ShellProcess } from '@deepseek-ai/dsh-shell'
@@ -35,6 +35,30 @@ async function readUntil(proc: ShellProcess, expected: string, timeoutMs = 5_000
   }
   throw new Error(`process output did not include ${JSON.stringify(expected)}; accumulated ${JSON.stringify(all)}`)
 }
+
+describe('Bash executable resolution', () => {
+  it('uses bare bash off Windows and trusts explicit configuration', () => {
+    expect(resolveBashPath(undefined, {}, 'linux')).toBe('bash')
+    expect(resolveBashPath('C:\\custom\\bash.exe', {}, 'win32')).toBe('C:\\custom\\bash.exe')
+  })
+
+  it('prefers Git for Windows and falls through to PATH candidates', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-bash-resolve-'))
+    const git = join(root, 'Git')
+    const pathDir = join(root, 'path')
+    mkdirSync(join(git, 'bin'), { recursive: true })
+    mkdirSync(pathDir)
+    writeFileSync(join(git, 'bin', 'bash.exe'), '')
+    writeFileSync(join(pathDir, 'bash.exe'), '')
+    const env = { PROGRAMFILES: root, Path: pathDir }
+    expect(candidateBashPaths(env)[0]).toBe(join(git, 'bin', 'bash.exe'))
+    expect(resolveBashPath(undefined, env, 'win32')).toBe(join(git, 'bin', 'bash.exe'))
+  })
+
+  it('fails loudly when Windows has no Bash installation', () => {
+    expect(() => resolveBashPath(undefined, {}, 'win32')).toThrow(/no Windows Bash executable/)
+  })
+})
 
 describe('LocalBashExecutor.run', () => {
   it('resolves with output and the effective timeout', async () => {

@@ -237,12 +237,17 @@ describe('macOS process inspector', () => {
     ])
   })
 
-  it('returns undefined for missing or invalid foreground groups and rejects unsupported platforms', () => {
+  it('returns undefined for missing or invalid foreground groups and supports the Windows ConPTY compatibility inspector', () => {
     const fake = fakeInternals()
     fake.setTpgid('-1')
     expect(createProcessInspector('darwin', 'arm64', fake.internals).foregroundPgid(1)).toBeUndefined()
     fake.internals.exec = () => { throw new Error('gone') }
     expect(createProcessInspector('darwin', 'arm64', fake.internals).foregroundPgid(1)).toBeUndefined()
-    expect(() => createProcessInspector('win32', 'x64', fake.internals)).toThrow('unsupported on platform win32')
+    const windows = createProcessInspector('win32', 'x64', fake.internals)
+    expect(windows.processSession(process.pid)).toEqual([])
+    expect(windows.isStdinWaiting(process.pid)).toBe(false)
+    expect(windows.processTree(process.pid)).toEqual([{ pid: process.pid, started: String(process.pid) }])
+    expect(windows.foregroundPgid(process.pid)).toBe(process.pid)
+    expect(windows.isAlive({ pid: process.pid, started: 'reused' })).toBe(false)
   })
 })

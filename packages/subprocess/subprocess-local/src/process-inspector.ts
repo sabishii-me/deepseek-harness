@@ -356,6 +356,49 @@ class MacProcessInspector extends PosixProcessInspector {
 
 }
 
+class WindowsProcessInspector implements ProcessInspector {
+  /**
+   * ConPTY does not expose POSIX foreground process groups. Treat the PTY root
+   * as the stable ownership token so prompt-marker readiness can still settle;
+   * stdin-wait inference remains unavailable and callers retain their bounded
+   * silence/timeout fallback.
+   */
+  foregroundPgid(shellPid: number): number | undefined {
+    return this.isAlive({ pid: shellPid, started: String(shellPid) }) ? shellPid : undefined
+  }
+
+  isStdinWaiting(_pgid: number): boolean {
+    return false
+  }
+
+  processTree(rootPid: number): ProcessIdentity[] {
+    const root = { pid: rootPid, started: String(rootPid) }
+    return this.isAlive(root) ? [root] : []
+  }
+
+  processSession(_sessionId: number): ProcessIdentity[] {
+    return []
+  }
+
+  isAlive(identity: ProcessIdentity): boolean {
+    if (identity.started !== String(identity.pid)) return false
+    try {
+      process.kill(identity.pid, 0)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  signalGroup(pgid: number, signal: SubprocessTerminalSignal): void {
+    process.kill(pgid, signal)
+  }
+
+  signalProcess(identity: ProcessIdentity, signal: 'SIGTERM' | 'SIGKILL'): void {
+    if (this.isAlive(identity)) process.kill(identity.pid, signal)
+  }
+}
+
 /**
  * Create the supported platform inspector or fail at plugin load.
  * @param platform - target Node platform.
@@ -370,5 +413,6 @@ export function createProcessInspector(
 ): ProcessInspector {
   if (platform === 'linux') return new LinuxProcessInspector(arch, internals)
   if (platform === 'darwin') return new MacProcessInspector(internals)
+  if (platform === 'win32') return new WindowsProcessInspector()
   throw new Error(`subprocess-local: terminal inspection is unsupported on platform ${platform}`)
 }

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepSeek Harness</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #0d1117; color: #e6edf3; }
+    main { width: min(34rem, calc(100vw - 4rem)); }
+    h1 { margin: 0 0 .75rem; font-size: 1.4rem; font-weight: 600; }
+    p { color: #8b949e; line-height: 1.6; }
+    .bar { height: 3px; overflow: hidden; border-radius: 2px; background: #21262d; }
+    .bar::after { content: ""; display: block; width: 40%; height: 100%; background: #2f81f7; animation: load 1.2s ease-in-out infinite; }
+    @keyframes load { from { transform: translateX(-100%); } to { transform: translateX(350%); } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Starting DeepSeek Harness</h1>
+    <p>The Bun backend is composing the Cordis plugin tree.</p>
+    <div class="bar" aria-label="Starting"></div>
+  </main>
+</body>
+</html>

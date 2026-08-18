@@ -27,6 +27,7 @@
     - id: terminal-bash
       name: '@deepseek-ai/dsh-terminal-bash'
       config:
+        shellPath: !!js "process.platform === 'win32' ? (process.env.ProgramFiles ?? 'C:/Program Files') + '/Git/bin/bash.exe' : '/bin/bash'"
         timeoutMs: 300000
 
     - id: persistent-bash
