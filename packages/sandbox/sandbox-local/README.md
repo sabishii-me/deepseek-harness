@@ -147,3 +147,7 @@ This Dev Note is working context for maintainers: undecided directions and open 
 An environment-coherent capability group example, such as bash plus fs against one container, remains undecided.
 
 </details>
+
+### Approved Windows workspace recovery
+
+When workspace-write preparation fails with `SetNamedSecurityInfoW` access denied for the exact workspace root, a composed Agent, approval answerer and subprocess provider can recover through the bundled Windows ACL diagnosis script. Recovery requests explicit one-shot approval before changing directory permissions. It preserves the requested sandbox policy and retries confinement preparation once, never the command body. Refusal or unavailable approval fails closed; cancellation prevents retry. A failed verification does not loop. Backups and restoration instructions remain under the current user's `.dsh-acl-recovery` directory. The repair subprocess is allowed to settle its rollback before cancellation propagates. Calls without a matching initiating Agent do not repair automatically.

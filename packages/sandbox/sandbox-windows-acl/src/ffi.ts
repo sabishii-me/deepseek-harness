@@ -39,6 +39,15 @@ function ffiTypes(): { PVOID: Ptr; PPVOID: Ptr } {
 export interface Win32Bindings extends Win32ProcessBindings {
   openProcess(desiredAccess: number, inheritHandle: number, pid: number): NativePtr
   openProcessToken(process: NativePtr, desiredAccess: number, tokenHandle: NativePtr): number
+  lookupPrivilegeValueW(systemName: null, name: string, luid: Buffer): number
+  adjustTokenPrivileges(
+    token: NativePtr,
+    disableAll: number,
+    newState: Buffer,
+    bufferLength: number,
+    previousState: null,
+    returnLength: null,
+  ): number
   localAlloc(flags: number, bytes: number): NativePtr
   localFree(memory: NativePtr): NativePtr
   convertStringSidToSidW(stringSid: string, sid: NativePtr): number
@@ -237,6 +246,8 @@ function bindings(): Win32Bindings {
   cached = extendWin32ProcessBindings(({ kernel32, advapi32, bind }) => ({
     openProcess: bind(kernel32, 'OpenProcess', PVOID, ['uint32', 'int', 'uint32']),
     openProcessToken: bind(advapi32, 'OpenProcessToken', 'int', [PVOID, 'uint32', PPVOID]),
+    lookupPrivilegeValueW: bind(advapi32, 'LookupPrivilegeValueW', 'int', ['str16', 'str16', PVOID]),
+    adjustTokenPrivileges: bind(advapi32, 'AdjustTokenPrivileges', 'int', [PVOID, 'int', PVOID, 'uint32', PVOID, PVOID]),
     localAlloc: bind(kernel32, 'LocalAlloc', PVOID, ['uint32', 'size_t']),
     localFree: bind(kernel32, 'LocalFree', PVOID, [PVOID]),
     convertStringSidToSidW: bind(advapi32, 'ConvertStringSidToSidW', 'int', ['str16', PPVOID]),

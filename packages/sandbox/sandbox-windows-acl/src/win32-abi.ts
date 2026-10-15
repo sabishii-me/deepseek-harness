@@ -8,6 +8,14 @@ export const TOKEN_ASSIGN_PRIMARY = 0x0001
 export const TOKEN_DUPLICATE = 0x0002
 /** Token right required to read token information. */
 export const TOKEN_QUERY = 0x0008
+/** Token right required to enable or disable privileges in the token. */
+export const TOKEN_ADJUST_PRIVILEGES = 0x0020
+/** SE_PRIVILEGE_ENABLED in a TOKEN_PRIVILEGES entry. */
+export const SE_PRIVILEGE_ENABLED = 0x00000002
+/** Size of one LUID_AND_ATTRIBUTES entry (LUID 8 bytes + DWORD attributes). */
+export const LUID_AND_ATTRIBUTES_SIZE = 12
+/** Size of a TOKEN_PRIVILEGES buffer carrying exactly one entry. */
+export const TOKEN_PRIVILEGES_ONE_SIZE = 16
 /** Token right required to replace the token default DACL. */
 export const TOKEN_ADJUST_DEFAULT = 0x0080
 /** Group attribute identifying the token logon SID. */
@@ -38,6 +46,8 @@ export const WRITE_RESTRICTED = 0x8
 export const WinWorldSid = 1
 /** TOKEN_INFORMATION_CLASS value for token groups. */
 export const TokenGroups = 2
+/** TOKEN_INFORMATION_CLASS value for the token's user SID. */
+export const TokenUser = 1
 /** TOKEN_INFORMATION_CLASS value for the token default DACL. */
 export const TokenDefaultDacl = 6
 /** SECURITY_INFORMATION flag selecting the DACL. */
@@ -91,6 +101,8 @@ export const CONTAINER_INHERIT_ACE = 0x2
 export const MAX_PATH = 260
 /** Successful Win32 status code. */
 export const ERROR_SUCCESS = 0
+/** GetLastError/setNamedSecurityInfoW result: the caller lacks the right the edit needs. */
+export const ERROR_ACCESS_DENIED = 5
 /** Win32 error reported when an immediate byte-range lock cannot be obtained. */
 export const ERROR_LOCK_VIOLATION = 33
 /** Generic read access bit. */

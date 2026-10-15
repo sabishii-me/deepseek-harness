@@ -77,6 +77,69 @@ export function findLogonSid(api: Win32Bindings, token: NativePtr): NativePtr {
 }
 
 /**
+ * Copy the token's user SID (S-1-5-21-…, the signed-in account). A write grant
+ * on a directory whose DACL omits this SID cannot write the mandatory label
+ * (SetNamedSecurityInfoW answers ERROR_ACCESS_DENIED because the LABEL in the
+ * SACL needs WRITE_OWNER), so the grant self-heals by first granting this SID
+ * full control — the same repair the shipped diagnose-windows-sandbox-acl
+ * script performs, and one this process may perform because WRITE_DAC is
+ * already held on its own workspace.
+ * @param api - the binding table.
+ * @param token - the token whose user SID is copied (requires TOKEN_QUERY).
+ * @returns a copied user SID (thrown when the token carries none).
+ */
+export function findCurrentUserSid(api: Win32Bindings, token: NativePtr): NativePtr {
+  const neededSlot = allocUint32()
+  api.getTokenInformation(token, abi.TokenUser, null, 0, neededSlot) // expected to fail with ERROR_INSUFFICIENT_BUFFER
+  const needed = decodeUint32(neededSlot)
+  if (needed === 0) throwLastError(api, 'GetTokenInformation', 'TokenUser size query')
+  const info = Buffer.alloc(needed)
+  if (api.getTokenInformation(token, abi.TokenUser, info, info.length, neededSlot) === 0) {
+    throwLastError(api, 'GetTokenInformation', 'TokenUser')
+  }
+  // TOKEN_USER { SID_AND_ATTRIBUTES User; } — the SID pointer leads the struct.
+  const sidPtr = decodePtrAt(info, 0)
+  if (sidPtr === null) throwLastError(api, 'GetTokenInformation', 'TokenUser: null SID')
+  const sidLength = api.getLengthSid(sidPtr)
+  if (sidLength === 0) throwLastError(api, 'GetLengthSid', 'user SID')
+  const copy = allocBytes(sidLength)
+  if (api.copySid(sidLength, copy, sidPtr) === 0) throwLastError(api, 'CopySid', 'user SID')
+  return copy
+}
+
+/**
+ * Enable `SeSecurityPrivilege` on an already-open token.
+ *
+ * Writing the mandatory Low label means writing the object's SACL, and
+ * SetNamedSecurityInfoW refuses that without SE_SECURITY_NAME. On an
+ * administrator token the privilege is PRESENT but DISABLED by default, so the
+ * failing apply is not a missing right — it is a missing
+ * AdjustTokenPrivileges call. Enabling it here is what makes the label apply on
+ * an elevated process (a non-elevated token does not contain the privilege at
+ * all, and this call then reports that as an ordinary failure).
+ *
+ * The privilege is enabled for the PROCESS token, so the write holds for every
+ * later grant of this server; nothing is enabled on any other process.
+ * @param api - the binding table.
+ * @param token - the token to adjust (requires TOKEN_ADJUST_PRIVILEGES).
+ * @returns true when the privilege is enabled on the token.
+ */
+export function enableSecurityPrivilege(api: Win32Bindings, token: NativePtr): boolean {
+  // TOKEN_PRIVILEGES { DWORD PrivilegeCount; LUID_AND_ATTRIBUTES[1] { LUID, DWORD } }
+  const privileges = Buffer.alloc(abi.TOKEN_PRIVILEGES_ONE_SIZE)
+  privileges.writeUInt32LE(1, 0)
+  const luid = privileges.subarray(4, 12)
+  if (api.lookupPrivilegeValueW(null, 'SeSecurityPrivilege', luid) === 0) return false
+  // Attributes immediately follow the 8-byte LUID (offset 4 + 8 = 12).
+  privileges.writeUInt32LE(abi.SE_PRIVILEGE_ENABLED, 4 + 8)
+  if (api.adjustTokenPrivileges(token, 0, privileges, privileges.length, null, null) === 0) return false
+  // AdjustTokenPrivileges reports success with a partial copy; GetLastError
+  // distinguishes "nothing changed" (ERROR_NOT_ALL_ASSIGNED, 1300) from a
+  // genuine enable, so the caller never assumes an apply it did not get.
+  return api.getLastError() === abi.ERROR_SUCCESS
+}
+
+/**
  * Create one well-known SID (68-byte buffer) and assert its validity.
  * @param api - the binding table.
  * @param type - the WELL_KNOWN_SID_TYPE to create.

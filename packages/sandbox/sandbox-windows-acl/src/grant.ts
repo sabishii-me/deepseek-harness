@@ -12,10 +12,10 @@
  * @module @deepseek-ai/dsh-sandbox-windows-acl/grant
  */
 
-import { grantWrite, revokeWrite } from './acl.ts'
+import { grantOwnerFullControl, grantWrite, revokeWrite } from './acl.ts'
 import { allocPtrSlot, decodePtr, isNullPtr, throwLastError, win32Sync } from './ffi.ts'
 import type { NativePtr, Win32Bindings } from './ffi.ts'
-import { makeWellKnownSid } from './token.ts'
+import { enableSecurityPrivilege, findCurrentUserSid, makeWellKnownSid, openCurrentProcessToken } from './token.ts'
 import * as abi from './win32-abi.ts'
 
 /**
@@ -38,6 +38,10 @@ export class AclWriteGrant {
   private readonly worldSidPtr: NativePtr
   private readonly revocablePaths: string[] = []
   private readonly standingPaths: string[] = []
+  /** Lazily copied caller user SID (see {@link repairOwnerAccess}); freed by dispose. */
+  private ownerSidPtr: NativePtr | undefined
+  /** Whether SeSecurityPrivilege was already attempted on the process token. */
+  private labelPrivilegeChecked = false
 
   private constructor(
     api: Win32Bindings,
@@ -103,8 +107,51 @@ export class AclWriteGrant {
    *   dispose — the temp-directory lifecycle).
    */
   add(path: string, standing = false): void {
+    this.ensureLabelPrivilege()
     ;(standing ? this.standingPaths : this.revocablePaths).push(path)
-    grantWrite(this.api, path, this.sidPtr, this.lowLabelSidPtr, this.worldSidPtr)
+    grantWrite(this.api, path, this.sidPtr, this.lowLabelSidPtr, this.worldSidPtr, this.repairOwnerAccess)
+  }
+
+  /**
+   * Grant the CALLER's own SID full control on one directory (DACL only).
+   * Called at most once per `add` when the label write was denied because the
+   * directory's DACL omits the caller: holding WRITE_DAC is enough for this
+   * edit, and it restores the owner-implicit WRITE_OWNER the label needs. The
+   * caller SID is read lazily so a healthy workspace never opens its token.
+   */
+  private readonly repairOwnerAccess = (path: string): void => {
+    this.ownerSidPtr ??= this.resolveOwnerSid()
+    grantOwnerFullControl(this.api, path, this.ownerSidPtr)
+  }
+
+  /** Open this process's token once, copy its user SID, and close the handle.
+   * @returns the copied caller user SID owned by this grant.
+   */
+  private resolveOwnerSid(): NativePtr {
+    const token = openCurrentProcessToken(this.api)
+    try {
+      return findCurrentUserSid(this.api, token)
+    } finally {
+      if (this.api.closeHandle(token) === 0) throwLastError(this.api, 'CloseHandle', 'current process token')
+    }
+  }
+
+  /** Enable SeSecurityPrivilege for the process token, so the Low label can be
+   * written. Called once, before the first grant that needs a label; an
+   * administrator token holds the privilege disabled and this enables it, while
+   * a non-elevated token simply reports the privilege as unavailable
+   * (the grant path then proceeds without the label, and confinement still
+   * rests on the token and capability ACE).
+   */
+  private ensureLabelPrivilege(): void {
+    if (this.labelPrivilegeChecked) return
+    this.labelPrivilegeChecked = true
+    const token = openCurrentProcessToken(this.api)
+    try {
+      enableSecurityPrivilege(this.api, token)
+    } finally {
+      if (this.api.closeHandle(token) === 0) throwLastError(this.api, 'CloseHandle', 'current process token')
+    }
   }
 
   /** Every directory currently carrying the grant, in grant order. */
@@ -126,6 +173,7 @@ export class AclWriteGrant {
       ['write SID', this.sidPtr],
       ['Low label SID', this.lowLabelSidPtr],
       ['world SID', this.worldSidPtr],
+      ...this.ownerSidPtr === undefined ? [] : [['caller user SID', this.ownerSidPtr] as const],
     ] as const) {
       try {
         const freed = this.api.localFree(sidPtr)

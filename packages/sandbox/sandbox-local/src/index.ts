@@ -39,6 +39,8 @@ import type { ConfinedArgv, ConfinedSandboxMode, RunnerFailureRule, SandboxEnfor
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { AclWriteGrant, assertTempRootOutsideWorkspace, registerAclDiagnosisSkill, tempWriteSid, workspaceWriteSid } from '@deepseek-ai/dsh-sandbox-windows-acl'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import { recoverWorkspaceGrant } from './workspace-recovery.ts'
+import { repairWorkspaceGrant } from './workspace-repair.ts'
 import { bwrapProfileArgs, landlockProfileArgs, seatbeltProfileArgs } from './profiles.ts'
 
 /** Plugin config. All optional — `static Config` supplies the defaults. */
@@ -273,10 +275,15 @@ export class LocalSandboxProvider extends SandboxProvider {
    * dispose).
    */
   private readonly workspaceGrants = new Map<string, AclWriteGrant>()
+  private repairWorkspace: Parameters<typeof recoverWorkspaceGrant>[2] = async () => false
   private readonly tempCapabilities = new Map<string, AclTempCapability>()
 
   constructor(ctx: Context, config: Config) {
     super(ctx)
+    ctx.inject(['agents', 'approval', 'subprocess'], (ready) => {
+      const repair = (request: import('./workspace-recovery.ts').WorkspaceGrantFailure) => repairWorkspaceGrant(ready, request)
+      ready.effect(() => { this.repairWorkspace = repair; return () => { this.repairWorkspace = async () => false } })
+    })
     // The schema (static Config) defaults every field — the casts record
     // those runtime facts. An empty runnerCommand means "not configured":
     // use the platform chain.
@@ -334,7 +341,10 @@ export class LocalSandboxProvider extends SandboxProvider {
       })
     }
     const selected = this.selectRunner(policy.mode)
-    const runnerArgv = this.runnerArgv(selected.runner, policy)
+    const runnerArgv = selected.runner === 'windows-acl'
+      ? await recoverWorkspaceGrant(() => this.runnerArgv(selected.runner, policy),
+        { policy, ...(signal ? { signal } : {}) }, this.repairWorkspace)
+      : this.runnerArgv(selected.runner, policy)
     return Promise.resolve<ConfinedArgv>({
       argv: [...runnerArgv, '--', ...argv],
       enforcement: selected.enforcement,

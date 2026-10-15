@@ -47,12 +47,12 @@ import { existsSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Win32Error } from '@deepseek-ai/dsh-win32-process'
 
-import { grantWrite, revokeWrite } from './acl.ts'
+import { grantOwnerFullControl, grantWrite, revokeWrite } from './acl.ts'
 import { allocPtrSlot, decodePtr, isNullPtr, throwLastError, win32 } from './ffi.ts'
 import type { NativePtr, Win32Bindings } from './ffi.ts'
 import { assertPrivateTempDisjoint } from './path-boundary.ts'
 import { drainPipe, spawnSandboxed, spawnSandboxedInherited, waitForExit } from './spawn.ts'
-import { createRestrictedToken, findLogonSid, makeWellKnownSid, openCurrentProcessToken, restrictTokenIntegrity, setTokenDefaultDaclGrant } from './token.ts'
+import { createRestrictedToken, enableSecurityPrivilege, findCurrentUserSid, findLogonSid, makeWellKnownSid, openCurrentProcessToken, restrictTokenIntegrity, setTokenDefaultDaclGrant } from './token.ts'
 import * as abi from './win32-abi.ts'
 
 export { AclWriteGrant } from './grant.ts'
@@ -241,6 +241,12 @@ export class AclSandbox {
       this.writeSidPtr = this.writeSid === undefined ? undefined : parseSid(this.writeSid)
       this.tempWriteSidPtr = this.tempWriteSid === undefined ? undefined : parseSid(this.tempWriteSid)
 
+      // Writing the Low label means writing the SACL, which needs
+      // SeSecurityPrivilege. An administrator token holds it DISABLED by
+      // default, so the label apply would otherwise fail (or silently drop) even
+      // when the process was started elevated. Enable it before any grant.
+      enableSecurityPrivilege(api, currentToken)
+
       const tempDir = this.mode === 'read-only' || this.tempDirOption === null ? null : this.tempDirOption
       /* v8 ignore next -- constructor validation requires workspace-write to supply
          an explicit temp directory or null; the other branches normalize to null. */
@@ -265,17 +271,28 @@ export class AclSandbox {
       const worldSid = makeWellKnownSid(api, abi.WinWorldSid)
       this.sidAllocations.push(lowLabelSid, worldSid)
 
+      // A directory whose DACL omits the caller has no WRITE_OWNER, so the
+      // label half of a grant is denied. The caller's own user SID already sits
+      // in the open token; granting it full control needs only WRITE_DAC and
+      // restores the implicit WRITE_OWNER, so the grant retries once. Allocated
+      // only when a grant actually fails.
+      let ownerSid: NativePtr | undefined
+      const repairOwnerAccess = (target: string): void => {
+        ownerSid ??= findCurrentUserSid(api, currentToken)
+        this.sidAllocations.push(ownerSid)
+        grantOwnerFullControl(api, target, ownerSid)
+      }
       if (this.manageDacls) {
         if (this.writeSidPtr !== undefined) {
           for (const path of this.writableDirs) {
-            grantWrite(api, path, this.writeSidPtr, lowLabelSid, worldSid)
+            grantWrite(api, path, this.writeSidPtr, lowLabelSid, worldSid, repairOwnerAccess)
           }
           if (tempDir !== null && this.tempWriteSidPtr !== undefined) {
             // Record BEFORE granting: grantWrite can throw after a successful
             // apply (a LocalFree failure), and the fail-closed catch must still
             // revoke that path (revoking an ungranted path is a no-op merge).
             this.grantedPaths.push({ path: tempDir, sidPtr: this.tempWriteSidPtr })
-            grantWrite(api, tempDir, this.tempWriteSidPtr, lowLabelSid, worldSid)
+            grantWrite(api, tempDir, this.tempWriteSidPtr, lowLabelSid, worldSid, repairOwnerAccess)
           }
         }
       }
@@ -445,3 +462,5 @@ export class AclSandbox {
     }
   }
 }
+
+export { workspaceRepairScript } from './repair-script.ts'

@@ -204,3 +204,5 @@ This Dev Note is working context for maintainers: undecided directions and open 
 The warn-only posture for unusually wide directories and FAT-class volumes is documented in the limitations above but not implemented, and a cleanup command that reaps standing workspace ACEs from renamed workspaces is undecided. Both are open directions, not shipped behavior.
 
 </details>
+
+The exported `workspaceRepairScript()` returns the bundled diagnosis script for an approved recovery owner to extract outside ASAR. Reading the asset does not modify permissions or execute the script. The caller owns authorization, bounded target selection, extraction lifetime and durable recovery reports.
