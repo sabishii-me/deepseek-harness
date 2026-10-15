@@ -28,6 +28,12 @@
     // not declaration path aliases, keep each package/vendor source compiled
     // under its own tsconfig boundary.
     "paths": {
+      "@deepseek-ai/dsh-experimental-shisa-provider/types": ["./packages/experimental/shisa-provider/src/types.ts"],
+      "@deepseek-ai/dsh-experimental-shisa-provider": ["./packages/experimental/shisa-provider/src/index.ts"],
+
+      "@deepseek-ai/dsh-experimental-jouzu-backend/ui-types": ["./packages/experimental/jouzu-backend/src/ui-types.ts"],
+      "@deepseek-ai/dsh-experimental-jouzu-ui/client": ["./packages/experimental/jouzu-ui/src/client/index.ts"],
+      "@deepseek-ai/dsh-experimental-jouzu-backend": ["./packages/experimental/jouzu-backend/src/index.ts"],
       "@deepseek-ai/dsh-experimental-session-search": ["./packages/experimental/session-search/src/index.ts"],
       "@deepseek-ai/dsh-experimental-ralph-bundle": ["./packages/experimental/ralph-bundle/src/index.ts"],
       "@deepseek-ai/dsh-experimental-terminal-bundle": ["./packages/experimental/terminal-bundle/src/index.ts"],

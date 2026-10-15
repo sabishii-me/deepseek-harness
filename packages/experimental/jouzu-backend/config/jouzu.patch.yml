@@ -1,0 +1,59 @@
+# Optional Jouzu execution/UI composition for official DSH 0.2.1-alpha.2.
+#
+# Jouzu is an independent harness (Pi coding agent + Jouzu bootstrap, flow,
+# background tasks and session UI). A Jouzu Session is a native DSH Session;
+# only its execution is owned by Jouzu. Nothing here disables a DSH plugin and
+# no DSH source is modified.
+#
+# This overlay replaces the profile's `agent-loop` row because the composition
+# below mounts the unmodified native loop itself, in an isolated `agents` scope,
+# and installs a routing factory that delegates:
+#   agentPreset === 'jouzu' -> Jouzu harness (flow / background / tasks)
+#   anything else           -> the unmodified native loop (ordinary DSH Sessions)
+#
+# DSH_JOUZU_CLI: absolute path to the user's independently installed Jouzu cli.js.
+# Jouzu's STATE directory is NOT configured here: the backend derives it per Session
+# inside the owning workspace, because the DSH sandbox permits writes under the
+# workspace only. A fixed JOUZU_HOME outside that workspace makes Flow ownership
+# unobtainable and the process exits at startup. Concurrent Sessions therefore stay
+# independent instead of contending for one Flow lock.
+# No permission mode is imposed; use the normal DSH permission selector.
+- id: agent-loop
+  disabled: true
+- insert:
+    - id: jouzu-backend
+      name: '@deepseek-ai/dsh-experimental-jouzu-backend'
+      config:
+        argv: !!js >-
+          (() => { const cli = process.env.DSH_JOUZU_CLI;
+          if (!cli) throw new Error('Set DSH_JOUZU_CLI to your independent Jouzu cli.js');
+          return [process.execPath, cli]; })()
+        # Jouzu is an ordinary Node program and needs the launcher's environment
+        # (PATH, SystemRoot, TEMP, APPDATA, ...) to find Node, its own runtime and
+        # its config. Its state directory is chosen per Session inside the owning
+        # workspace; an externally fixed JOUZU_HOME cannot acquire Flow ownership.
+        env: !!js >-
+          (() => Object.assign({}, process.env))()
+    - id: jouzu-preset
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: jouzu
+        name: Jouzu
+        description: Independent Jouzu execution; models and permissions are selected in DSH.
+        # A confined Jouzu process cannot create children, so its shell and file
+        # work must run through the tool bridge. The bridge serves whatever these
+        # plugins register in the Session scope, so the read/write/search/execute
+        # surface is mounted here; the backend then exposes exactly the confined
+        # allowlist over it. tool-bash stays out on Windows: its shell cannot run
+        # under the restricted token, and the bridged pwsh covers execution.
+        plugins:
+          - name: '@deepseek-ai/dsh-tool-fs'
+          - name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+    - id: jouzu-ui
+      name: '@deepseek-ai/dsh-experimental-jouzu-ui'

@@ -1,0 +1,3 @@
+.body { padding: 8px 0 8px 24px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-secondary); }
+.body p, .body pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; font: inherit; }
+.body ul { margin: 0; padding-inline-start: 16px; }

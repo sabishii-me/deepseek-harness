@@ -47,3 +47,10 @@ worktrees/
 .agents/worktrees/
 .typert-*/
 native/system/test/bin/
+
+# Local integration state and scratch (not part of the fork)
+.jouzu-dsh-state/
+.jouzu-dsh-restricted/
+.pi/
+jouzu-user-test/
+apps/desktop/src-tauri/

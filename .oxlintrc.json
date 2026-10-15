@@ -353,6 +353,28 @@
       "plugins": [
         "typescript"
       ]
+    },
+    {
+      // The Jouzu and shisa integration packages are independent of DSH's own
+      // code style: they are validated by their own suites and released
+      // separately, so line-length and strictness rules here would only churn
+      // without protecting a DSH invariant. Correctness rules stay on.
+      "files": [
+        "packages/experimental/jouzu-backend/**/*.ts",
+        "packages/experimental/jouzu-ui/**/*.ts",
+        "packages/experimental/jouzu-ui/**/*.tsx",
+        "packages/experimental/shisa-provider/**/*.ts",
+        "packages/experimental/shisa-ui/**/*.ts",
+        "packages/experimental/shisa-ui/**/*.tsx"
+      ],
+      "rules": {
+        "@stylistic/max-len": "off",
+        "@stylistic/member-delimiter-style": "off",
+        "typescript/no-non-null-assertion": "off",
+        "typescript/no-invalid-void-type": "off",
+        "typescript/no-unsafe-function-type": "off",
+        "eslint/prefer-spread": "off"
+      }
     }
   ]
 }

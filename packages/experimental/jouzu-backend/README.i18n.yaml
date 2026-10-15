@@ -1,0 +1,58 @@
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write packages/experimental/jouzu-backend/README.md
+/experimental-jouzu-backend:
+  en: f8a7cb4112375ae6
+  zh: 5a22b697ef574aea
+/experimental-jouzu-backend/status:
+  en: 5ae915da8761fee2
+  zh: da2e3f83eab00eda
+/experimental-jouzu-backend/configuration-and-consumption:
+  en: 0879f001f6f4b8ec
+  zh: 00b5c11bc5844cb7
+/experimental-jouzu-backend/jouzu-feature-presentation:
+  en: cf309ca105e9efad
+  zh: 1c530bb6653072ab
+/experimental-jouzu-backend/model-experience:
+  en: 5915dc8297771a6e
+  zh: 613ea20b319c590a
+/experimental-jouzu-backend/known-limitations-and-deferred-work:
+  en: 35b8b8f5a699adcf
+  zh: a15e0f8d940ff067
+/experimental-jouzu-backend/native-agent-integration-in-progress:
+  en: 88f21dbc977c3104
+  zh: 78953eb7a80441a6
+/experimental-jouzu-backend/browser-verified-development-path:
+  en: 20c2f92edc057826
+  zh: 4ad959ab326f3855
+/experimental-jouzu-backend/session-model-controls:
+  en: 2c1a850f2402d601
+  zh: 142bed32a0157379
+/experimental-jouzu-backend/native-token-accounting:
+  en: 9e1fbbbf5e691f14
+  zh: 8bda6c812f375212
+/experimental-jouzu-backend/continuations-dialogs-and-terminal-failures:
+  en: 4a3f7914477f1ed5
+  zh: 2191d0904540e7a9
+/experimental-jouzu-backend/execution-policy-admission:
+  en: 37ddf34d0b943dd6
+  zh: 1ae7fcb87dc3b2ff
+/experimental-jouzu-backend/exact-match-native-recovery:
+  en: 8053a6ac6684127b
+  zh: bf82c1ae001e7f86
+/experimental-jouzu-backend/official-model-bridge-qualification:
+  en: e1a626e0e85f7e8f
+  zh: 3cc2e26c8e685925
+/experimental-jouzu-backend/portable-preview-composition:
+  en: 9917411072b62008
+  zh: 8093a6b61629f348
+/experimental-jouzu-backend/tool-argument-stream-settlement:
+  en: 47606307a56f9331
+  zh: deb998860b33f505
+/experimental-jouzu-backend/dsh-tool-bridge-implementation:
+  en: 83a7c5fce98f90fd
+  zh: 107ddbbd5f8a4a1c
+/experimental-jouzu-backend/workspace-write-interactive-test-mode:
+  en: f29f7c552575e2d2
+  zh: 05325dcfbb4425cd
