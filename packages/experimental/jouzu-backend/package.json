@@ -18,13 +18,25 @@
     "./ui-types": {
       "types": "./lib/types/ui-types.d.ts",
       "default": "./lib/types/ui-types.js"
+    },
+    "./model-bridge": {
+      "types": "./lib/types/model-bridge.d.ts",
+      "default": "./lib/types/model-bridge.js"
+    },
+    "./pi-extension": {
+      "types": "./lib/types/pi-extension.d.ts",
+      "default": "./lib/types/pi-extension.js"
     }
   },
   "files": [
     "lib/index.js",
     "lib/types/**/*.d.ts",
     "lib/types/ui-types.js",
-    "config/*.yml"
+    "config/*.yml",
+    "lib/types/model-bridge.js",
+    "lib/types/model-request.js",
+    "lib/types/model-stream.js",
+    "lib/types/pi-extension.js"
   ],
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:~",
