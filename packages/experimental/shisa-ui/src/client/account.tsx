@@ -101,7 +101,7 @@ function DesktopOnboarding({ complete, openSection, ...props }: Actions & PropsL
   const [checking, setChecking] = useState(true)
   useEffect(() => {
     let active = true
-    void props.read().then(state => {
+    void props.read().then((state) => {
       if (!active) return
       if (state.phase === 'ready') complete()
       else setChecking(false)
@@ -136,16 +136,16 @@ export function apply(ctx: Context): void {
 
 /** Contributions share the same Remote-backed actions in every surface. */
 export function registerAccountUi(scope: Context, actions: Actions): void {
-    // Native shells suppress the core's automatic credential step. Contribute
-    // our own step through the public onboarding slot rather than asking the
-    // pre-service desktop installer to navigate an iframe that is not ready.
-    // Web keeps the existing sign-in slot to avoid showing two login steps.
-    if ('dshDesktop' in globalThis) {
-      scope.slots.inject('settings.onboarding', () => scope.slots.register({
-        name: 'settings.onboarding', id: 'shisa', order: -10, locale: 'shisa',
-        inject: () => actions,
-      }, DesktopOnboarding))
-    }
-    scope.slots.inject('settings.models.sign-in', () => scope.slots.register({ name: 'settings.models.sign-in', priority: -10, locale: 'shisa', inject: () => actions }, Onboarding))
-    scope.slots.inject('settings.models.provider-card', () => scope.slots.register({ name: 'settings.models.provider-card', key: 'shisa-provider', locale: 'shisa', inject: () => actions }, Account))
+  // Native shells suppress the core's automatic credential step. Contribute
+  // our own step through the public onboarding slot rather than asking the
+  // pre-service desktop installer to navigate an iframe that is not ready.
+  // Web keeps the existing sign-in slot to avoid showing two login steps.
+  if ('dshDesktop' in globalThis) {
+    scope.slots.inject('settings.onboarding', () => scope.slots.register({
+      name: 'settings.onboarding', id: 'shisa', order: -10, locale: 'shisa',
+      inject: () => actions,
+    }, DesktopOnboarding))
+  }
+  scope.slots.inject('settings.models.sign-in', () => scope.slots.register({ name: 'settings.models.sign-in', priority: -10, locale: 'shisa', inject: () => actions }, Onboarding))
+  scope.slots.inject('settings.models.provider-card', () => scope.slots.register({ name: 'settings.models.provider-card', key: 'shisa-provider', locale: 'shisa', inject: () => actions }, Account))
 }
