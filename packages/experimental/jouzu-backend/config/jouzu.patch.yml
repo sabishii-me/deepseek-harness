@@ -55,5 +55,6 @@
             disabled: !!js process.platform === 'win32'
           - name: '@deepseek-ai/dsh-tool-pwsh'
             disabled: !!js process.platform !== 'win32'
-    - id: jouzu-ui
-      name: '@deepseek-ai/dsh-experimental-jouzu-ui'
+          # The UI renders this harness's own session shape, so it belongs to the
+          # preset that produces those sessions and nowhere else.
+          - name: '@deepseek-ai/dsh-experimental-jouzu-ui'
