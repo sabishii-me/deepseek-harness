@@ -223,7 +223,6 @@
   "references": [
     { "path": "./packages/experimental/shisa-provider" },
 
-    { "path": "./packages/experimental/jouzu-backend" },
     { "path": "./packages/experimental/client-ui-cot-translation/tsconfig.host.json" },
     { "path": "./packages/experimental/cot-translation-bundle" },
     { "path": "./packages/experimental/session-search" },

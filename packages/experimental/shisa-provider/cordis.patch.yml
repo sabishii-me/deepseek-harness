@@ -1,0 +1,3 @@
+- insert:
+    - id: shisa-provider
+      name: '@deepseek-ai/dsh-experimental-shisa-provider'

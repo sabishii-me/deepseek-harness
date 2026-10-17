@@ -23,7 +23,8 @@
   "files": [
     "lib/index.js",
     "lib/client.js",
-    "lib/types/**/*.d.ts"
+    "lib/types/**/*.d.ts",
+    "cordis.patch.yml"
   ],
   "scripts": {
     "bundle": "tsdown"
@@ -56,6 +57,9 @@
         "@deepseek-ai/dsh-client-ui-settings-models",
         "@deepseek-ai/dsh-client-locale"
       ]
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
     }
   }
 }

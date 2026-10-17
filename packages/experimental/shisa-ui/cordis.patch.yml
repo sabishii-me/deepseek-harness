@@ -1,0 +1,3 @@
+- insert:
+    - id: shisa-ui
+      name: '@deepseek-ai/dsh-experimental-shisa-ui'

@@ -1,6 +1,0 @@
-.dock {
-  box-sizing: border-box;
-  width: calc(100% - 2 * var(--dsh-composer-side-clearance) - 4 * var(--dsh-composer-dock-inset));
-  max-width: calc(var(--dsh-composer-card-max-width) - 4 * var(--dsh-composer-dock-inset));
-  margin: 0 auto;
-}
